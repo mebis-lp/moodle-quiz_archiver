@@ -18,13 +18,15 @@
  * This file defines the TSPManager class.
  *
  * @package   quiz_archiver
- * @copyright 2024 Niels Gandraß <niels@gandrass.de>
+ * @copyright 2025 Niels Gandraß <niels@gandrass.de>
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
 namespace quiz_archiver;
 
-defined('MOODLE_INTERNAL') || die();
+// @codingStandardsIgnoreLine
+defined('MOODLE_INTERNAL') || die(); // @codeCoverageIgnore
+
 
 /**
  * Manages all Time-Stamp Protocol (TSP) related tasks for an ArchiveJob.
@@ -55,7 +57,7 @@ class TSPManager {
      *
      * @return TimeStampProtocolClient A fresh TimeStampProtocolClient instance
      */
-    protected function getTimestampProtocolClient(): TimeStampProtocolClient {
+    protected function get_timestampprotocolclient(): TimeStampProtocolClient {
         return new TimeStampProtocolClient($this->config->tsp_server_url);
     }
 
@@ -86,11 +88,11 @@ class TSPManager {
     public function has_tsp_timestamp(): bool {
         global $DB;
 
-        $num_tsp_records = $DB->count_records(self::TSP_TABLE_NAME, [
-            'jobid' => $this->job->get_id()
+        $numtsprecords = $DB->count_records(self::TSP_TABLE_NAME, [
+            'jobid' => $this->job->get_id(),
         ]);
 
-        return $num_tsp_records > 0;
+        return $numtsprecords > 0;
     }
 
     /**
@@ -140,26 +142,26 @@ class TSPManager {
     public function timestamp(): void {
         global $DB;
 
-        // Get artifact checksum
+        // Get artifact checksum.
         $artifactchecksum = $this->job->get_artifact_checksum();
         if ($artifactchecksum === null) {
             throw new \RuntimeException(get_string('archive_signing_failed_no_artifact', 'quiz_archiver'));
         }
 
-        // Check if TSP signing globally is enabled
+        // Check if TSP signing globally is enabled.
         if (!$this->config->tsp_enable) {
             throw new \Exception(get_string('archive_signing_failed_tsp_disabled', 'quiz_archiver'));
         }
 
-        // Issue TSP timestamp
-        $tspclient = $this->getTimestampProtocolClient();
+        // Issue TSP timestamp.
+        $tspclient = $this->get_timestampprotocolclient();
         $tspdata = $tspclient->sign($artifactchecksum);
 
-        // Store TSP data
+        // Store TSP data.
         $DB->insert_record(self::TSP_TABLE_NAME, [
             'jobid' => $this->job->get_id(),
             'timecreated' => time(),
-            'server' => $tspclient->get_server_url(),
+            'server' => $tspclient->get_serverurl(),
             'timestampquery' => $tspdata['query'],
             'timestampreply' => $tspdata['reply'],
         ]);

@@ -1,14 +1,155 @@
 # Changelog
 
+## Version 2.3.0 (2025012100)
+
+- Fix opening job details modal for quizzes with single quotes in their names
+- Prepare backup creation routine for Moodle 4.6 and above
+- Add support for HTTP and SOCKS proxy servers
+  - Starting with [moodle-quiz-archive-worker](https://github.com/ngandrass/moodle-quiz-archive-worker) version `>= v2.2.0`
+- Add [instructions for configuring proxy server usage](https://quizarchiver.gandrass.de/installation/archiveworker/#proxy-servers) to the documentation
+- Add [troubleshooting tips for font rendering problems](https://quizarchiver.gandrass.de/configuration/initialconfig/pitfalls/#text-is-not-rendered-correctly) to the documentation
+
+
+## Version 2.2.0 (2024102900)
+
+- Add student ID number to quiz attempt header
+- Add student ID number to exported `attempts_metadata.csv` file inside quiz archives
+- Allow student ID number to be used in attempt filename pattern as `${idnumber}`
+- Fix creation of quiz archives with duplicate archive names (e.g., when using `quiz-archive-${quizid}-${quizname}` as the archive name pattern)
+- Improve display of user firstname, lastname, and avatar in quiz attempt header
+- Improve display of empty values in quiz attempt header (e.g., feedback, idnumber, ...)
+- Fix name of `QUIZ_ARCHIVER_PREVENT_REDIRECT_TO_LOGIN` environment variable in archive worker documentation
+- Fix single unit test suit execution command in developer documentation
+- Improve content spacing in docs
+- Only run Moodle CI for commits and PRs on master and develop branches to prevent duplicate runs
+
+
+## Version 2.1.0 (2024101000)
+
+- Ensure compatibility with Moodle 4.5 (LTS)
+- Create an official Quiz Archiver documentation website: [https://quizarchiver.gandrass.de/](https://quizarchiver.gandrass.de/)
+    - Great thanks to @melanietreitinger for reviewing and providing valuable feedback!
+- Automate building and deployment of documentation website
+- Cleanup and restructure existing documentation within README
+- Add demo quiz archive worker information to admin settings page
+- Fix job details dialog not showing up if artifact file was deleted but metadata still remains
+- Fix PHP warning on autoinstall admin page
+- Add Moodle 4.5 to automated (CI) test matrix
+
+
+## Version 2.0.0 (2024082100)
+
+- Switch to semantic versioning (see README.md, Section: "Versioning and Compatibility")
+- Fix rendering of GeoGebra applets under certain conditions
+- Improve robustness of attempt page rendering state detection ("ready for export" detection)
+- Improve status and error notifications for all actions (job creation, deletion, ...)
+- Prevent form data resubmission on page reload
+- Add tooltip to archive overview refresh button and list time of last page refresh
+- Improve visual presentation of the quiz archive overview table
+- Improve visual presentation of the quiz archive creation form
+- Add complex examples (large image compression, GeoGebra applets) to reference course
+
+**Note:** Use of [moodle-quiz-archive-worker](https://github.com/ngandrass/moodle-quiz-archive-worker) `>= v2.0.0` is required.
+
+
+## Version 1.4.0 (2024072900)
+
+- Show periodically updated progress of running archive jobs in job overview table and job details modal
+- Creation of new job status values:
+    - `WAITING_FOR_BACKUP`: All attempt reports are generated and the archive worker service is waiting for the Moodle backup to be ready.
+    - `FINALIZING`: The archive worker service is finalizing the archive creation process (checksums, compression, ...).
+- Create hover tooltip with help text for all job status values
+- Add additional soft error handling to some web service functions
+- Minor compatibility fixes for PHP 7.4 and Moodle 4.1 (LTS)
+- Expanding unit test coverage to include the whole plugin logic
+- Optimizing unit test code to improve readability and maintainability
+- Create generic testing data generator
+- Code quality improvements
+
+**Note:** Use of [moodle-quiz-archive-worker](https://github.com/ngandrass/moodle-quiz-archive-worker) `>= v1.6.0` is required.
+
+
+## Version 1.3.0 (2024071800)
+
+- Optionally scale down large images within quiz reports to preserve space and keep PDF files compact
+- Optionally compress images within quiz reports to preserve space and keep PDF files compact
+- Fix image inlining for files with non-lowercase file extensions (e.g., `image.JPG`)
+- Fix conditional hide/show of retention time in quiz archive form when locked
+- Optimize order of settings in quiz archive form and plugin admin settings
+
+**Note:** Use of [moodle-quiz-archive-worker](https://github.com/ngandrass/moodle-quiz-archive-worker) `>= v1.5.0` is required.
+
+
+## Version 1.2.10 (2024070900)
+
+- Full code overhaul to comply with the [Moodle Coding Style](https://moodledev.io/general/development/policies/codingstyle)
+- Enforce strict coding style checks during CI runs / prior to any new releases
+- Improve English and German translations
+ 
+
+## Version 1.2.9 (2024070800)
+
+- Synchronize default job timeout setting with quiz archive worker and add hint about the additional timeout inside the 
+  archive worker config
+- Describe different job timeout settings inside the "Known Pitfalls" section of
+  the README file.
+- Fix display of variables in archive / report names help texts in Moodle <= 4.2
+
+_Note: Keep in mind to update your
+[Quiz Archive Worker](https://github.com/ngandrass/moodle-quiz-archive-worker) too!_
+
+
+## Version 1.2.8 (2024052900)
+
+- Fix autoinstall admin UI form for Moodle 4.1 (LTS)
+- Fix edge case during GDPR exports via the Moodle privacy API when using PHP 7.4
+- Fix webservice token generation on Moodle 4.1 (LTS)
+- Largely extend the test coverage. Now almost everything is tested automatically
+  for all combinations of:
+    - Moodle version: 4.1 - 4.4
+    - PHP versions: 7.4 - 8.3
+    - Database backends: mariadb, pgsql
+- Cleanup attempt report generation code
+- Provide documentation how to run tests locally
+- Fix typos
+
+_Note: Keep in mind to update your
+[Quiz Archive Worker](https://github.com/ngandrass/moodle-quiz-archive-worker) too!_
+
+
+## Version 1.2.7 (2024051300)
+
+- Fix inlining of images with filenames that contains URL encoded characters (e.g., `image (1).jpg`)
+- Fix inlining of Moodle theme icons (e.g., drag and drop markers)
+- Fix PHP warning on quiz_archiver_generate_attempt_report webservice call
+- Fix quiz header / summary table injection in Moodle 4.4+
+- Replace deprecated Moodle 4.4+ language strings
+
+
+## Version 1.2.6 (2024042900)
+
+- Extend automated tests to cover Moodle 4.4 with PHP 8.1 to 8.3 using PostgreSQL and MariaDB
+- Removal of deprecated function use for Moodle 4.4 (See MDL-67667)
+
+
+## Version 1.2.5 (2024040900)
+
+- Add an automatic plugin configuration feature, to simplify the setup process (#15 - Thanks to @melanietreitinger)
+- Display a welcome message with setup instructions during plugin installation
+- Add support for automated configuration using a CLI script
+- Add error message during job creation, when plugin is not fully configured yet
+- Create quizzes with 100, 250, 500, and 1000 attempts in the reference course `res/backup-moodle2-course-qa-ref.mbz`
+- Update installation instructions in README.md to reflect the new setup process
+
 
 ## Version 1.2.4 (2024021901)
 
 - Fix image inlining for Moodle instances that reside in subdirectories (e.g., `https://your.domain/moodle`)
-  - Thanks a lot to @500gLychee for extensive testing and reporting!
+    - Thanks a lot to @500gLychee for extensive testing and reporting!
 - Fix inlining of miscellaneous local images that do not fall into any specific link type category
 - Detect quizzes without attempts and prevent archive creation until at least one attempt was registered
 - Create GitHub issue template forms for bug reports and feature requests
-  - Found a bug? Please report it here: https://github.com/ngandrass/moodle-quiz_archiver/issues
+    - Found a bug? Please report it here: https://github.com/ngandrass/moodle-quiz_archiver/issues
 
 
 ## Version 1.2.3 (2024011200)

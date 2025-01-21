@@ -123,9 +123,20 @@
     <tr>
         <td>{{#str}} status {{/str}}</td>
         <td>
-            <span class="badge badge-{{status_display_args.color}}">
+            <span
+                class="badge badge-{{status_display_args.color}}"
+                data-toggle="tooltip"
+                data-placement="top"
+                title="{{status_display_args.help}}"
+            >
                 {{status_display_args.text}}
             </span>
+            {{#status_display_args.statusextras.progress}}
+                <span>
+                    &nbsp;&ndash;&nbsp;&nbsp;{{#str}} progress, quiz_archiver {{/str}}:
+                    {{status_display_args.statusextras.progress}}%
+                </span>
+            {{/status_display_args.statusextras.progress}}
         </td>
     </tr>
     <tr>

@@ -18,7 +18,7 @@
  * Defines a scheduled task to clean up temporary files
  *
  * @package   quiz_archiver
- * @copyright 2024 Niels Gandraß <niels@gandrass.de>
+ * @copyright 2025 Niels Gandraß <niels@gandrass.de>
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
@@ -26,11 +26,15 @@ namespace quiz_archiver\task;
 
 use quiz_archiver\FileManager;
 
-defined('MOODLE_INTERNAL') || die();
+// @codingStandardsIgnoreLine
+defined('MOODLE_INTERNAL') || die(); // @codeCoverageIgnore
+
 
 
 /**
  * Scheduled task to periodically clean up temporary files.
+ *
+ * @codeCoverageIgnore This is just a wrapper for FileManager::cleanup_temp_files()
  */
 class cleanup_temp_files extends \core\task\scheduled_task {
 
@@ -51,8 +55,8 @@ class cleanup_temp_files extends \core\task\scheduled_task {
      */
     public function execute(): void {
         echo get_string('task_cleanup_temp_files_start', 'quiz_archiver') . "\n";
-        $files_deleted = FileManager::cleanup_temp_files();
-        echo get_string('task_cleanup_temp_files_report', 'quiz_archiver', $files_deleted) . "\n";
+        $numfilesdeleted = FileManager::cleanup_temp_files();
+        echo get_string('task_cleanup_temp_files_report', 'quiz_archiver', $numfilesdeleted) . "\n";
     }
 
 }

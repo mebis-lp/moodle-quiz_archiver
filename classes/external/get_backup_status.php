@@ -18,14 +18,17 @@
  * This file defines the get_backup_status webservice function
  *
  * @package   quiz_archiver
- * @copyright 2024 Niels Gandraß <niels@gandrass.de>
+ * @copyright 2025 Niels Gandraß <niels@gandrass.de>
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
 namespace quiz_archiver\external;
 
-// TODO: Remove after deprecation of Moodle 4.1 (LTS) on 08-12-2025
-require_once($CFG->dirroot.'/mod/quiz/report/archiver/patch_401_class_renames.php');
+defined('MOODLE_INTERNAL') || die(); // @codeCoverageIgnore
+
+
+// TODO (MDL-0): Remove after deprecation of Moodle 4.1 (LTS) on 08-12-2025.
+require_once($CFG->dirroot.'/mod/quiz/report/archiver/patch_401_class_renames.php'); // @codeCoverageIgnore
 
 use core_external\external_api;
 use core_external\external_function_parameters;
@@ -33,8 +36,6 @@ use core_external\external_single_structure;
 use core_external\external_value;
 use quiz_archiver\ArchiveJob;
 use quiz_archiver\BackupManager;
-
-defined('MOODLE_INTERNAL') || die();
 
 /**
  * API endpoint to get the status of a Moodle backup
@@ -47,8 +48,16 @@ class get_backup_status extends external_api {
      */
     public static function execute_parameters(): external_function_parameters {
         return new external_function_parameters([
-            'jobid' => new external_value(PARAM_TEXT, 'UUID of the job this artifact is associated with', VALUE_REQUIRED),
-            'backupid' => new external_value(PARAM_TEXT, 'ID of the backup controller', VALUE_REQUIRED),
+            'jobid' => new external_value(
+                PARAM_TEXT,
+                'UUID of the job this artifact is associated with',
+                VALUE_REQUIRED
+            ),
+            'backupid' => new external_value(
+                PARAM_TEXT,
+                'ID of the backup controller',
+                VALUE_REQUIRED
+            ),
         ]);
     }
 
@@ -58,15 +67,19 @@ class get_backup_status extends external_api {
      */
     public static function execute_returns(): external_single_structure {
         return new external_single_structure([
-            'status' => new external_value(PARAM_TEXT, 'Status of the requested backup', VALUE_REQUIRED),
+            'status' => new external_value(
+                PARAM_TEXT,
+                'Status of the requested backup',
+                VALUE_REQUIRED
+            ),
         ]);
     }
 
     /**
      * Execute the webservice function
      *
-     * @param string $jobid_raw
-     * @param string $backupid_raw
+     * @param string $jobidraw
+     * @param string $backupidraw
      * @return array
      * @throws \coding_exception
      * @throws \dml_exception
@@ -74,32 +87,36 @@ class get_backup_status extends external_api {
      * @throws \required_capability_exception
      */
     public static function execute(
-        string $jobid_raw,
-        string $backupid_raw
+        string $jobidraw,
+        string $backupidraw
     ): array {
-        // Validate request
+        // Validate request.
         $params = self::validate_parameters(self::execute_parameters(), [
-            'jobid' => $jobid_raw,
-            'backupid' => $backupid_raw,
+            'jobid' => $jobidraw,
+            'backupid' => $backupidraw,
         ]);
 
-        // Validate that the jobid exists
+        // Validate that the jobid exists.
         try {
             $job = ArchiveJob::get_by_jobid($params['jobid']);
         } catch (\dml_exception $e) {
             return ['status' => 'E_JOB_NOT_FOUND'];
         }
 
-        // Check access rights
+        // Check access rights.
         if (!$job->has_read_access(optional_param('wstoken', null, PARAM_TEXT))) {
             return ['status' => 'E_ACCESS_DENIED'];
         }
 
-        // Check capabilities
-        $context = \context_module::instance($job->get_cm_id());
+        // Check capabilities.
+        $context = \context_module::instance($job->get_cmid());
         require_capability('mod/quiz_archiver:use_webservice', $context);
 
-        // Get backup
+        // The following code is tested covered by more specific tests.
+        // @codingStandardsIgnoreLine
+        // @codeCoverageIgnoreStart
+
+        // Get backup.
         try {
             $bm = new BackupManager($params['backupid']);
 
@@ -118,8 +135,11 @@ class get_backup_status extends external_api {
             return ['status' => 'E_BACKUP_NOT_FOUND'];
         }
 
-        // Report success
+        // Report success.
         return ['status' => 'SUCCESS'];
+
+        // @codingStandardsIgnoreLine
+        // @codeCoverageIgnoreEnd
     }
 
 }

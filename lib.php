@@ -18,11 +18,13 @@
  * Legacy lib definitions
  *
  * @package   quiz_archiver
- * @copyright 2024 Niels Gandraß <niels@gandrass.de>
+ * @copyright 2025 Niels Gandraß <niels@gandrass.de>
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-defined('MOODLE_INTERNAL') || die();
+// @codingStandardsIgnoreLine
+defined('MOODLE_INTERNAL') || die(); // @codeCoverageIgnore
+
 
 use quiz_archiver\FileManager;
 
@@ -50,17 +52,17 @@ function quiz_archiver_pluginfile($course, $cm, $context, $filearea, $args, $for
     require_capability('quiz/grading:viewstudentnames', $context);
     require_capability('quiz/grading:viewidnumber', $context);
 
-    // Validate course
+    // Validate course.
     if ($args[1] !== $course->id) {
         send_file_not_found();
     }
 
-    // Try to serve file
+    // Try to serve file.
     $fs = get_file_storage();
     $relativepath = implode('/', $args);
     $fullpath = "/$context->id/".FileManager::COMPONENT_NAME."/$filearea/$relativepath";
 
-    // Catch virtual files
+    // Catch virtual files.
     if (FileManager::filearea_is_virtual($filearea)) {
         try {
             $fm = new FileManager($args[1], $args[2], $args[3]);
@@ -70,7 +72,7 @@ function quiz_archiver_pluginfile($course, $cm, $context, $filearea, $args, $for
         }
     }
 
-    // Try to serve physical files
+    // Try to serve physical files.
     $file = $fs->get_file_by_hash(sha1($fullpath));
     if (!$file || $file->is_directory()) {
         send_file_not_found();

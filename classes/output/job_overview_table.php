@@ -18,7 +18,7 @@
  * This file defines the job overview table renderer
  *
  * @package   quiz_archiver
- * @copyright 2024 Niels Gandraß <niels@gandrass.de>
+ * @copyright 2025 Niels Gandraß <niels@gandrass.de>
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
@@ -26,10 +26,13 @@ namespace quiz_archiver\output;
 
 use quiz_archiver\ArchiveJob;
 
-defined('MOODLE_INTERNAL') || die();
+// @codingStandardsIgnoreLine
+defined('MOODLE_INTERNAL') || die(); // @codeCoverageIgnore
 
+// @codeCoverageIgnoreStart
 global $CFG;
 require_once($CFG->libdir.'/tablelib.php');
+// @codeCoverageIgnoreEnd
 
 
 /**
@@ -52,25 +55,28 @@ class job_overview_table extends \table_sql {
         parent::__construct($uniqueid);
         $this->define_columns([
             'timecreated',
-            'status',
             'user',
             'jobid',
             'filesize',
+            'status',
             'actions',
         ]);
 
         $this->define_headers([
             get_string('task_starttime', 'admin'),
-            get_string('status'),
             get_string('user'),
             get_string('jobid', 'quiz_archiver'),
             get_string('size'),
+            get_string('status'),
             '',
         ]);
 
         $this->set_sql(
-            'j.jobid, j.userid, j.timecreated, j.timemodified, j.status, j.retentiontime, j.artifactfilechecksum, f.pathnamehash, f.filesize, u.username',
-            '{'.ArchiveJob::JOB_TABLE_NAME.'} AS j JOIN {user} AS u ON j.userid = u.id LEFT JOIN {files} AS f ON j.artifactfileid = f.id',
+            'j.jobid, j.userid, j.timecreated, j.timemodified, j.status, j.statusextras, j.retentiontime, j.artifactfilechecksum, '.
+                'f.pathnamehash, f.filesize, u.username',
+            '{'.ArchiveJob::JOB_TABLE_NAME.'} j '.
+                'JOIN {user} u ON j.userid = u.id '.
+                'LEFT JOIN {files} f ON j.artifactfileid = f.id',
             'j.courseid = :courseid AND j.cmid = :cmid AND j.quizid = :quizid',
             [
                 'courseid' => $courseid,
@@ -103,8 +109,24 @@ class job_overview_table extends \table_sql {
      * @throws \coding_exception
      */
     public function col_status($values) {
-        $s = ArchiveJob::get_status_display_args($values->status);
-        return '<span class="badge badge-'.$s['color'].'">'.$s['text'].'</span><br/><small>'.date('H:i:s', $values->timemodified).'</small>';
+        $html = '';
+        $s = ArchiveJob::get_status_display_args(
+            $values->status,
+            $values->statusextras ? json_decode($values->statusextras, true) : null
+        );
+
+        $statustooltiphtml = 'data-toggle="tooltip" data-placement="top" title="'.$s['help'].'"';
+        $html .= '<span class="badge badge-'.$s['color'].'" '.$statustooltiphtml.'>'.$s['text'].'</span><br/>';
+
+        if (isset($s['statusextras']['progress'])) {
+            $html .= '<span title="'.get_string('progress', 'quiz_archiver').'">';
+            $html .= '<i class="fa fa-spinner"></i>&nbsp;'.$s['statusextras']['progress'].'%';
+            $html .= '</span><br/>';
+        }
+
+        $html .= '<small>'.date('H:i:s', $values->timemodified).'</small>';
+
+        return $html;
     }
 
     /**
@@ -140,10 +162,11 @@ class job_overview_table extends \table_sql {
     public function col_actions($values) {
         $html = '';
 
-        // Action: Show details
+        // Action: Show details.
+        // @codingStandardsIgnoreLine
         $html .= '<a href="#" id="job-details-'.$values->jobid.'" class="btn btn-primary mx-1" role="button" title="'.get_string('showdetails', 'admin').'" alt="'.get_string('showdetails', 'admin').'"><i class="fa fa-info-circle"></i></a>';
 
-        // Action: Download
+        // Action: Download.
         if ($values->pathnamehash) {
             $artifactfile = get_file_storage()->get_file_by_hash($values->pathnamehash);
             $artifacturl = \moodle_url::make_pluginfile_url(
@@ -156,19 +179,23 @@ class job_overview_table extends \table_sql {
                 true,
             );
 
-            $download_title = get_string('download').': '.$artifactfile->get_filename().' ('.get_string('size').': '.display_size($artifactfile->get_filesize()).')';
-            $html .= '<a href="'.$artifacturl.'" target="_blank" class="btn btn-success mx-1" role="button" title="'.$download_title.'" alt="'.$download_title.'"><i class="fa fa-download"></i></a>';
+            $downloadtitle = get_string('download').': '.$artifactfile->get_filename().
+                             ' ('.get_string('size').': '.display_size($artifactfile->get_filesize()).')';
+            // @codingStandardsIgnoreLine
+            $html .= '<a href="'.$artifacturl.'" target="_blank" class="btn btn-success mx-1" role="button" title="'.$downloadtitle.'" alt="'.$downloadtitle.'"><i class="fa fa-download"></i></a>';
         } else {
+            // @codingStandardsIgnoreLine
             $html .= '<a href="#" target="_blank" class="btn btn-outline-success disabled mx-1" role="button" alt="'.get_string('download').'" disabled aria-disabled="true"><i class="fa fa-download"></i></a>';
         }
 
-        // Action: Delete
+        // Action: Delete.
         $deleteurl = new \moodle_url('', [
             'id' => optional_param('id', null, PARAM_INT),
             'mode' => 'archiver',
             'action' => 'delete_job',
             'jobid' => $values->jobid,
         ]);
+        // @codingStandardsIgnoreLine
         $html .= '<a href="'.$deleteurl.'" class="btn btn-danger mx-1" role="button" alt="'.get_string('delete', 'moodle').'"><i class="fa fa-times"></i></a>';
 
         return $html;

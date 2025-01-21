@@ -18,15 +18,16 @@
  * Defines the signing form for artifacts
  *
  * @package    quiz_archiver
- * @copyright  2024 Niels Gandraß <niels@gandrass.de>
+ * @copyright  2025 Niels Gandraß <niels@gandrass.de>
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
 namespace quiz_archiver\form;
 
-defined('MOODLE_INTERNAL') || die();
+defined('MOODLE_INTERNAL') || die(); // @codeCoverageIgnore
 
-require_once($CFG->dirroot.'/lib/formslib.php');
+
+require_once($CFG->dirroot.'/lib/formslib.php'); // @codeCoverageIgnore
 
 
 /**
@@ -40,34 +41,32 @@ class job_sign_form extends \moodleform {
      * @throws \coding_exception
      */
     public function definition() {
+        global $OUTPUT;
         $mform = $this->_form;
 
-        // Warning message
-        $warn_head = get_string('areyousure', 'moodle');
-        $warn_msg = get_string('sign_archive_warning', 'quiz_archiver', $this->optional_param('jobid', null, PARAM_TEXT));
-        $warn_details = get_string('jobid', 'quiz_archiver').': '.$this->optional_param('jobid', null, PARAM_TEXT);
-        $mform->addElement('html', <<<EOD
-            <div class="alert alert-info" role="alert">
-                <h4>$warn_head</h4>
-                $warn_msg
-                <hr/>
-                $warn_details
-            </div>
-        EOD);
+        // Warning message.
+        $warnhead = get_string('areyousure', 'moodle');
+        $warnmsg = get_string('sign_archive_warning', 'quiz_archiver', $this->optional_param('jobid', null, PARAM_TEXT));
+        $warndetails = get_string('jobid', 'quiz_archiver').': '.$this->optional_param('jobid', null, PARAM_TEXT);
+        $mform->addElement('html', $OUTPUT->notification(
+            "<h4>$warnhead</h4> $warnmsg <hr/> $warndetails",
+            \core\output\notification::NOTIFY_INFO,
+            false,
+        ));
 
-        // Preserve internal information of mod_quiz
+        // Preserve internal information of mod_quiz.
         $mform->addElement('hidden', 'id', $this->optional_param('id', null, PARAM_INT));
         $mform->setType('id', PARAM_INT);
         $mform->addElement('hidden', 'mode', 'archiver');
         $mform->setType('mode', PARAM_TEXT);
 
-        // Options
+        // Options.
         $mform->addElement('hidden', 'action', 'sign_job');
         $mform->setType('action', PARAM_TEXT);
         $mform->addElement('hidden', 'jobid', $this->optional_param('jobid', null, PARAM_TEXT));
         $mform->setType('jobid', PARAM_TEXT);
 
-        // Action buttons
+        // Action buttons.
         $this->add_action_buttons(true, get_string('sign_archive', 'quiz_archiver'));
     }
 

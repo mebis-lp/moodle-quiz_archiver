@@ -18,22 +18,23 @@
  * This file defines the update_job_status webservice function
  *
  * @package   quiz_archiver
- * @copyright 2024 Niels Gandraß <niels@gandrass.de>
+ * @copyright 2025 Niels Gandraß <niels@gandrass.de>
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
 namespace quiz_archiver\external;
 
-// TODO: Remove after deprecation of Moodle 4.1 (LTS) on 08-12-2025
-require_once($CFG->dirroot.'/mod/quiz/report/archiver/patch_401_class_renames.php');
+defined('MOODLE_INTERNAL') || die(); // @codeCoverageIgnore
+
+
+// TODO (MDL-0): Remove after deprecation of Moodle 4.1 (LTS) on 08-12-2025.
+require_once($CFG->dirroot.'/mod/quiz/report/archiver/patch_401_class_renames.php'); // @codeCoverageIgnore
 
 use core_external\external_api;
 use core_external\external_function_parameters;
 use core_external\external_single_structure;
 use core_external\external_value;
 use quiz_archiver\ArchiveJob;
-
-defined('MOODLE_INTERNAL') || die();
 
 /**
  * API endpoint to update the status of a quiz archiver job
@@ -46,8 +47,21 @@ class update_job_status extends external_api {
      */
     public static function execute_parameters(): external_function_parameters {
         return new external_function_parameters([
-            'jobid' => new external_value(PARAM_TEXT, 'UUID of the job this artifact is associated with', VALUE_REQUIRED),
-            'status' => new external_value(PARAM_TEXT, 'New status to set for job with UUID of jobid', VALUE_REQUIRED),
+            'jobid' => new external_value(
+                PARAM_TEXT,
+                'UUID of the job this artifact is associated with',
+                VALUE_REQUIRED
+            ),
+            'status' => new external_value(
+                PARAM_TEXT,
+                'New status to set for job with UUID of jobid',
+                VALUE_REQUIRED
+            ),
+            'statusextras' => new external_value(
+                PARAM_RAW,
+                'JSON containing additional information for the new job status',
+                VALUE_DEFAULT
+            ),
         ]);
     }
 
@@ -57,35 +71,41 @@ class update_job_status extends external_api {
      */
     public static function execute_returns(): external_single_structure {
         return new external_single_structure([
-            'status' => new external_value(PARAM_TEXT, 'Status of the executed wsfunction'),
+            'status' => new external_value(
+                PARAM_TEXT,
+                'Status of the executed wsfunction'
+            ),
         ]);
     }
 
     /**
      * Execute the webservice function
      *
-     * @param string $jobid_raw
-     * @param string $status_raw
+     * @param string $jobidraw
+     * @param string $statusraw
+     * @param string|null $statusextrasraw
      * @return array
+     * @throws \coding_exception
      * @throws \invalid_parameter_exception
      * @throws \required_capability_exception
-     * @throws \coding_exception
      */
     public static function execute(
-        string $jobid_raw,
-        string $status_raw
+        string $jobidraw,
+        string $statusraw,
+        ?string $statusextrasraw = null
     ): array {
-        // Validate request
+        // Validate request.
         $params = self::validate_parameters(self::execute_parameters(), [
-            'jobid' => $jobid_raw,
-            'status' => $status_raw,
+            'jobid' => $jobidraw,
+            'status' => $statusraw,
+            'statusextras' => $statusextrasraw,
         ]);
 
         try {
             $job = ArchiveJob::get_by_jobid($params['jobid']);
 
-            // Check capabilities
-            $context = \context_module::instance($job->get_cm_id());
+            // Check capabilities.
+            $context = \context_module::instance($job->get_cmid());
             require_capability('mod/quiz_archiver:use_webservice', $context);
 
             if ($job->is_complete()) {
@@ -100,14 +120,28 @@ class update_job_status extends external_api {
                 ];
             }
 
-            $job->set_status($params['status']);
+            // Prepare statusextras.
+            $statusextras = null;
+            if ($params['statusextras']) {
+                $statusextras = json_decode($params['statusextras'], true, 16, JSON_THROW_ON_ERROR);
+            }
+
+            // Update job status.
+            $job->set_status(
+                $params['status'],
+                $statusextras
+            );
         } catch (\dml_exception $e) {
             return [
                 'status' => 'E_UPDATE_FAILED',
             ];
+        } catch (\JsonException $e) {
+            return [
+                'status' => 'E_INVALID_STATUSEXTRAS_JSON',
+            ];
         }
 
-        // Report success
+        // Report success.
         return [
             'status' => 'OK',
         ];

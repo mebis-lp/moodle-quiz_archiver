@@ -21,61 +21,47 @@
 
     Example context (json):
     {
+        "archiveQuizForm": "<!-- Generated Moodle form HTML -->",
         "baseurl": "https://example.com/mod/quiz/archiver/",
-        "jobInitiationForm": "<form>[...]</form>",
-        "jobInitiationStatusAlert": {
-            "color": "success",
-            "dismissible": true,
-            "message": "Job initiated successfully.",
-            "returnMessage": "Return to the overview page."
-        },
         "jobOverviewTable": "<!-- Generated Moodle table HTML -->",
         "jobs": [
             {
                 "jobid": "3e6273fe-3784-11ee-be56-0242ac120002",
-                "json": "{...}"
+                "base64Data": "{...}"
             },
             {
                 "jobid": "45edd9f6-3784-11ee-be56-0242ac120002",
-                "json": "{...}"
+                "base64Data": "{...}"
             }
         ],
-        "quizMissingSomethingWarning": "<div>[...]</div>"
+        "time": 0
     }
 }}
-{{#quizMissingSomethingWarning}}
-    {{{quizMissingSomethingWarning}}}
-    <br><br>
-{{/quizMissingSomethingWarning}}
 
-{{! Archive quiz form }}
-<div>
-    {{{jobInitiationForm}}}
-    {{#jobInitiationStatusAlert}}
-        <div class="alert alert-{{color}} {{#dismissible}}alert-dismissible{{/dismissible}}" role="alert">
-            {{message}}
-            {{#returnMessage}}
-                <br/><br/>
-                <a href="{{{baseurl}}}">{{returnMessage}}</a>
-            {{/returnMessage}}
-            {{#dismissible}}
-                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
-                    <span aria-hidden="true">&times;</span>
-                </button>
-            {{/dismissible}}
-        </div>
-    {{/jobInitiationStatusAlert}}
+{{! Quiz archive form }}
+<div class="quiz_archiver-archive-quiz-form mb-4">
+    {{{archiveQuizForm}}}
 </div>
 
 {{! List of existing archives }}
 {{#jobOverviewTable}}
 <h1>
     {{#str}} job_overview, quiz_archiver {{/str}}
-    <a href="{{{baseurl}}}" class="small mx-2" title="{{#str}} refresh, moodle {{/str}}">
+    <a
+        href="{{{baseurl}}}"
+        class="small mx-2"
+        title="{{#str}} refresh, moodle {{/str}}"
+        data-toggle="tooltip"
+        data-placement="right"
+    >
         <i class="fa fa-rotate-right"></i>
     </a>
 </h1>
 <div>
+    {{#str}} last_updated, quiz_archiver {{/str}}:
+    {{#userdate}} {{time}}, %T {{/userdate}}
+</div>
+<div class="quiz_archiver-job-overview-table">
     {{{jobOverviewTable}}}
 </div>
 
@@ -86,7 +72,7 @@
                 var modal = await ModalFactory.create({
                     type: ModalFactory.types.DEFAULT,
                     title: '{{#str}} quiz_archive_details, quiz_archiver {{/str}}',
-                    body: Templates.render('quiz_archiver/job_details', JSON.parse('{{{json}}}')),
+                    body: Templates.render('quiz_archiver/job_details', JSON.parse(atob('{{{base64Data}}}'))),
                     large: true,
                 });
                 modal.show();

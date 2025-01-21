@@ -19,16 +19,17 @@
  *
  * @package     quiz_archiver
  * @category    upgrade
- * @copyright   2024 Niels Gandraß <niels@gandrass.de>
+ * @copyright   2025 Niels Gandraß <niels@gandrass.de>
  * @license     https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-defined('MOODLE_INTERNAL') || die();
+// @codingStandardsIgnoreLine
+defined('MOODLE_INTERNAL') || die(); // @codeCoverageIgnore
+
 
 /**
  * Custom uninstallation procedure.
  */
 function xmldb_quiz_archiver_uninstall() {
-
     return true;
 }

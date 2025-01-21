@@ -19,16 +19,24 @@
  *
  * @package     quiz_archiver
  * @category    upgrade
- * @copyright   2024 Niels Gandraß <niels@gandrass.de>
+ * @copyright   2025 Niels Gandraß <niels@gandrass.de>
  * @license     https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-defined('MOODLE_INTERNAL') || die();
+// @codingStandardsIgnoreLine
+defined('MOODLE_INTERNAL') || die(); // @codeCoverageIgnore
+
 
 /**
  * Custom code to be run to update the plugin database.
  *
  * @param int $oldversion The version we are upgrading from
+ * @return true
+ * @throws ddl_exception
+ * @throws ddl_field_missing_exception
+ * @throws ddl_table_missing_exception
+ * @throws downgrade_exception
+ * @throws upgrade_exception
  */
 function xmldb_quiz_archiver_upgrade($oldversion) {
     global $DB;
@@ -74,25 +82,25 @@ function xmldb_quiz_archiver_upgrade($oldversion) {
     if ($oldversion < 2023072700) {
         // Replace foreign-unique key with simple foreign key for userid in quiz_report_archiver_jobs.
         $table = new xmldb_table('quiz_report_archiver_jobs');
-        $old_key = new xmldb_key('userid', XMLDB_KEY_FOREIGN_UNIQUE, ['userid'], 'user', ['id']);
-        $new_key = new xmldb_key('userid', XMLDB_KEY_FOREIGN, ['userid'], 'user', ['id']);
+        $oldkey = new xmldb_key('userid', XMLDB_KEY_FOREIGN_UNIQUE, ['userid'], 'user', ['id']);
+        $newkey = new xmldb_key('userid', XMLDB_KEY_FOREIGN, ['userid'], 'user', ['id']);
 
         // Perform key exchange.
-        $dbman->drop_key($table, $old_key);
-        $dbman->add_key($table, $new_key);
+        $dbman->drop_key($table, $oldkey);
+        $dbman->add_key($table, $newkey);
 
         // Archiver savepoint reached.
         upgrade_plugin_savepoint(true, 2023072700, 'quiz', 'archiver');
     }
 
     if ($oldversion < 2023080104) {
-        // Remove foreign key constraints with reftables to be renamed
+        // Remove foreign key constraints with reftables to be renamed.
         $dbman->drop_key(
             new xmldb_table('quiz_report_archiver_files'),
             new xmldb_key('jobid', XMLDB_KEY_FOREIGN, ['jobid'], 'quiz_report_archiver_jobs', ['id'])
         );
 
-        // Rename tables to remove the "report_" prefix
+        // Rename tables to remove the "report_" prefix.
         $dbman->rename_table(
             new xmldb_table('quiz_report_archiver_jobs'),
             'quiz_archiver_jobs'
@@ -102,7 +110,7 @@ function xmldb_quiz_archiver_upgrade($oldversion) {
             'quiz_archiver_files'
         );
 
-        // Restore foreign key constraints
+        // Restore foreign key constraints.
         $dbman->add_key(
             new xmldb_table('quiz_archiver_files'),
             new xmldb_key('jobid', XMLDB_KEY_FOREIGN, ['jobid'], 'quiz_archiver_jobs', ['id'])
@@ -212,6 +220,19 @@ function xmldb_quiz_archiver_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2024011000, 'quiz', 'archiver');
     }
 
+    if ($oldversion < 2024072200) {
+        // Define field statusextras to be added to quiz_archiver_jobs.
+        $table = new xmldb_table('quiz_archiver_jobs');
+        $field = new xmldb_field('statusextras', XMLDB_TYPE_TEXT, null, null, null, null, null, 'status');
+
+        // Conditionally launch add field statusextras.
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        // Archiver savepoint reached.
+        upgrade_plugin_savepoint(true, 2024072200, 'quiz', 'archiver');
+    }
 
     return true;
 }
