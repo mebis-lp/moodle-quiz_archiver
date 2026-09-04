@@ -1,2 +1,5 @@
+.cache
 .idea/
 *.iml
+.vscode
+site/

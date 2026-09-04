@@ -1,0 +1,88 @@
+# Moodle Quiz Archiver
+
+[![Latest Version](https://img.shields.io/github/v/release/ngandrass/moodle-quiz_archiver)](https://github.com/ngandrass/moodle-quiz_archiver/releases)
+[![PHP Support](https://img.shields.io/badge/dynamic/regex?url=https%3A%2F%2Fraw.githubusercontent.com%2Fngandrass%2Fmoodle-quiz_archiver%2Frefs%2Fheads%2Fmaster%2Fversion.php&search=meta-supported-php%7B(%3F%3Cdata%3E%5B%5E%7D%5D%2B)%7D&replace=%24%3Cdata%3E&label=PHP&color=blue)](https://github.com/ngandrass/moodle-quiz_archiver/blob/master/version.php)
+[![Moodle Support](https://img.shields.io/badge/dynamic/regex?url=https%3A%2F%2Fraw.githubusercontent.com%2Fngandrass%2Fmoodle-quiz_archiver%2Frefs%2Fheads%2Fmaster%2Fversion.php&search=meta-supported-moodle%7B(%3F%3Cdata%3E%5B%5E%7D%5D%2B)%7D&replace=%24%3Cdata%3E&label=Moodle&color=orange)](https://github.com/ngandrass/moodle-quiz_archiver/blob/master/version.php)
+[![GitHub Workflow Status: Moodle Plugin CI](https://img.shields.io/github/actions/workflow/status/ngandrass/moodle-quiz_archiver/moodle-plugin-ci.yml?label=Moodle%20Plugin%20CI)](https://github.com/ngandrass/moodle-quiz_archiver/actions/workflows/moodle-plugin-ci.yml)
+[![Code Coverage](https://img.shields.io/coverallsCoverage/github/ngandrass/moodle-quiz_archiver)](https://coveralls.io/github/ngandrass/moodle-quiz_archiver)
+[![GitHub Issues](https://img.shields.io/github/issues/ngandrass/moodle-quiz_archiver)](https://github.com/ngandrass/moodle-quiz_archiver/issues)
+[![GitHub Pull Requests](https://img.shields.io/github/issues-pr/ngandrass/moodle-quiz_archiver)](https://github.com/ngandrass/moodle-quiz_archiver/pulls)
+[![Maintenance Status](https://img.shields.io/maintenance/yes/9999)](https://github.com/ngandrass/moodle-quiz_archiver/)
+[![License](https://img.shields.io/github/license/ngandrass/moodle-quiz_archiver)](https://github.com/ngandrass/moodle-quiz_archiver/blob/master/LICENSE)
+[![Donate with PayPal](https://img.shields.io/badge/PayPal-donate-d85fa0)](https://www.paypal.me/ngandrass)
+[![Sponsor with GitHub](https://img.shields.io/badge/GitHub-sponsor-d85fa0)](https://github.com/sponsors/ngandrass)
+[![GitHub Stars](https://img.shields.io/github/stars/ngandrass/moodle-quiz_archiver?style=social)](https://github.com/ngandrass/moodle-quiz_archiver/stargazers)
+[![GitHub Forks](https://img.shields.io/github/forks/ngandrass/moodle-quiz_archiver?style=social)](https://github.com/ngandrass/moodle-quiz_archiver/network/members)
+[![GitHub Contributors](https://img.shields.io/github/contributors/ngandrass/moodle-quiz_archiver?style=social)](https://github.com/ngandrass/moodle-quiz_archiver/graphs/contributors)
+
+This plugin creates archivable versions of quiz attempts as PDF and HTML files
+for long-term storage independent of Moodle. If desired, Moodle backups (`.mbz`)
+of both the quiz and the whole course can be included. Generated PDFs can be
+converted into a PDF/A-3b compliant format for long-term storage. A checksum is
+calculated for every file within the archive, as well as the archive itself, to
+allow verification of file integrity. Archives can optionally be cryptographically
+signed by a trusted authority using the [Time-Stamp Protocol (TSP)](https://en.wikipedia.org/wiki/Time_stamp_protocol).
+Comprehensive archive settings allow selecting what should be included in the
+generated reports on a fine-granular level (e.g., exclude example solutions,
+include answer history, ...).
+
+Generated quiz attempt reports include all elements of the test, even complex
+ones like [MathJax](https://www.mathjax.org/) formulas, [STACK](https://marketplace.moodle.com/plugins/qtype_stack)
+plots, [GeoGebra](https://www.geogebra.org/) applets, and other question /
+content types that require JavaScript processing. All PDF and HTML files are
+fully text-searchable, including rendered MathJax formulas. Content is saved
+vector based, whenever possible, to allow high-quality printing and zooming
+while keeping the file size down.
+
+Quiz archives are created by an external [Moodle Archiving Worker](https://github.com/ngandrass/moodle-archiving-worker)
+service to remove load from Moodle and to eliminate the need to install a large
+number of software dependencies on the webserver. It can easily be deployed
+using Docker.
+
+
+## Getting Started
+
+Use the following buttons to jump to the desired section:
+
+[:material-download: Installation](/installation){ .md-button }
+&nbsp; &nbsp; &nbsp;
+[:material-cog: Configuration](/configuration){ .md-button }
+&nbsp; &nbsp; &nbsp;
+[:material-account: Usage](/usage){ .md-button }
+
+
+## Features
+
+- Archiving of quiz attempts as PDF/A-3b and HTML files
+- Support for file submissions / attachments (e.g., essay files)
+- Quiz attempt reports are accessible completely independent of Moodle, hereby
+  ensuring long-term readability
+- Customization of generated PDF and HTML reports
+    - Allows creation of reduced reports, e.g., without example solutions, for
+      handing out to students during inspection
+- Support for complex content and question types, including Drag and Drop, MathJax
+  formulas, STACK plots, and other question / content types that require JavaScript
+  processing
+- Support for question type [JACK](https://github.com/Wunderbyte-GmbH/moodle_qtype_jack)
+- Quiz attempt reports are fully text-searchable, including mathematical formulas
+- Moodle backups (`.mbz`) of both the quiz and the whole course are supported
+- Generation of checksums for every file within the archive and the archive itself
+- Cryptographic signing of archives and their creation date using the [Time-Stamp Protocol (TSP)](https://en.wikipedia.org/wiki/Time_stamp_protocol)
+- Archive and attempt report names are fully customizable and support dynamic
+  variables (e.g., course name, quiz name, username, ...)
+- Fine granular permission / capability management (e.g., only allow archive
+  creation but prevent deletion)
+- Allows definition of global archiving defaults as well as forced archiving
+  policies (i.e., locked archive job presets that cannot be changed by the user)
+- Fully asynchronous archive creation to reduce load on Moodle Server
+- Automatic deletion of quiz archives after a specified retention period
+- Data compression and vector based MathJax formulas to preserve disk space
+- Technical separation of Moodle and archive worker service
+- Data-minimising and security driven design
+
+<br>
+[:simple-moodle: Moodle Plugin Directory](https://marketplace.moodle.com/plugins/quiz_archiver){ .md-button }
+&nbsp; &nbsp; &nbsp;
+[:simple-github: GitHub](https://github.com/ngandrass/moodle-quiz_archiver){ .md-button }
+&nbsp; &nbsp; &nbsp;
+[:fontawesome-solid-bug: Bug Tracker](https://github.com/ngandrass/moodle-quiz_archiver/issues){ .md-button }

@@ -18,11 +18,13 @@
  * Web service function declarations for the quiz_archiver plugin.
  *
  * @package     quiz_archiver
- * @copyright   2024 Niels Gandraß <niels@gandrass.de>
+ * @copyright   2026 Niels Gandraß <niels@gandrass.de>
  * @license     https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-defined('MOODLE_INTERNAL') || die();
+// @codingStandardsIgnoreLine
+defined('MOODLE_INTERNAL') || die(); // @codeCoverageIgnore
+
 
 $functions = [
     'quiz_archiver_generate_attempt_report' => [
@@ -31,7 +33,7 @@ $functions = [
         'type' => 'read',
         'ajax' => true,
         'services' => [],
-        'capabilities' => 'mod/quiz_archiver:use_webservice',
+        'capabilities' => 'quiz/archiver:use_webservice',
     ],
     'quiz_archiver_get_attempts_metadata' => [
         'classname' => 'quiz_archiver\external\get_attempts_metadata',
@@ -39,7 +41,7 @@ $functions = [
         'type' => 'read',
         'ajax' => true,
         'services' => [],
-        'capabilities' => 'mod/quiz_archiver:use_webservice',
+        'capabilities' => 'quiz/archiver:use_webservice',
     ],
     'quiz_archiver_update_job_status' => [
         'classname' => 'quiz_archiver\external\update_job_status',
@@ -47,7 +49,7 @@ $functions = [
         'type' => 'write',
         'ajax' => true,
         'services' => [],
-        'capabilities' => 'mod/quiz_archiver:use_webservice',
+        'capabilities' => 'quiz/archiver:use_webservice',
     ],
     'quiz_archiver_process_uploaded_artifact' => [
         'classname' => 'quiz_archiver\external\process_uploaded_artifact',
@@ -55,7 +57,7 @@ $functions = [
         'type' => 'write',
         'ajax' => true,
         'services' => [],
-        'capabilities' => 'mod/quiz_archiver:use_webservice',
+        'capabilities' => 'quiz/archiver:use_webservice',
     ],
     'quiz_archiver_get_backup_status' => [
         'classname' => 'quiz_archiver\external\get_backup_status',
@@ -63,6 +65,6 @@ $functions = [
         'type' => 'read',
         'ajax' => true,
         'services' => [],
-        'capabilities' => 'mod/quiz_archiver:use_webservice',
+        'capabilities' => 'quiz/archiver:use_webservice',
     ],
 ];

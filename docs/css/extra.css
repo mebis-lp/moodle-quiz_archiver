@@ -1,0 +1,57 @@
+/* This file is used by mkdocs only.
+ * It depends on the mkdocs-material theme and is fully independent of Moodle.
+ *
+ * Disabling Moodle stylelint checks to prevent false errors and warnings.
+ */
+
+/* stylelint-disable */
+
+.md-main {
+    margin-bottom: 48px;
+}
+
+.img-thumbnail {
+    margin-right: 6px;
+    border: 2px solid #dddddd;
+    max-width: 320px !important;
+    max-height: 128px !important;
+
+    box-shadow: 2px 2px 4px 0px rgba(0, 0, 0, 0.06);
+    -webkit-box-shadow: 2px 2px 4px 0px rgba(0, 0, 0, 0.06);
+    -moz-box-shadow: 2px 2px 4px 0px rgba(0, 0, 0, 0.06);
+
+    transition: all 0.15s ease-out;
+}
+
+.img-thumbnail:hover,
+.img-thumbnail:active,
+.img-thumbnail:focus {
+    border: 2px solid #999999;
+
+    box-shadow: 2px 2px 4px 0px rgba(0, 0, 0, 0.1);
+    -webkit-box-shadow: 2px 2px 4px 0px rgba(0, 0, 0, 0.1);
+    -moz-box-shadow: 2px 2px 4px 0px rgba(0, 0, 0, 0.1);
+}
+
+.img-numeration-pill {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+
+    vertical-align: text-bottom;
+    margin-right: 2px;
+
+    border-radius: 50%;
+    box-shadow: 1px 1px 2px 0px rgba(105, 105, 105, 0.5);
+    -webkit-box-shadow: 1px 1px 2px 0px rgba(105, 105, 105, 0.5);
+    -moz-box-shadow: 1px 1px 2px 0px rgba(105, 105, 105, 0.5);
+
+    background-color: #e54846;
+    color: #ffffff;
+    font-family: var(--md-code-font-family);
+    font-weight: bold;
+    text-align: center;
+    font-size: 0.74em;
+}
+
+/* stylelint-enable */

@@ -18,15 +18,20 @@ namespace quiz_archiver\local\admin\setting;
 
 use quiz_archiver\ArchiveJob;
 
+// @codingStandardsIgnoreLine
+defined('MOODLE_INTERNAL') || die(); // @codeCoverageIgnore
+
+
 /**
  * Custom admin setting for attempt filename pattern input fields
  *
+ * @codeCoverageIgnore
+ *
  * @package   quiz_archiver
- * @copyright 2024 Niels Gandraß <niels@gandrass.de>
- * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or late
+ * @copyright 2026 Niels Gandraß <niels@gandrass.de>
+ * @license   https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class admin_setting_attempt_filename_pattern extends \admin_setting_configtext {
-
     /**
      * Validate data before storage
      * @param string $data data
@@ -34,18 +39,17 @@ class admin_setting_attempt_filename_pattern extends \admin_setting_configtext {
      * @throws \coding_exception
      */
     public function validate($data) {
-        // Basic data validation
+        // Basic data validation.
         $parentvalidation = parent::validate($data);
         if ($parentvalidation !== true) {
             return $parentvalidation;
         }
 
-        // Validate filename pattern
+        // Validate filename pattern.
         if (!ArchiveJob::is_valid_attempt_filename_pattern($data)) {
             return get_string('error_invalid_attempt_filename_pattern', 'quiz_archiver');
         }
 
         return true;
     }
-
 }

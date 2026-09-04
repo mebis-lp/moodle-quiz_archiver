@@ -18,7 +18,7 @@
  * This file defines the quiz archiver class.
  *
  * @package   quiz_archiver
- * @copyright 2024 Niels Gandraß <niels@gandrass.de>
+ * @copyright 2026 Niels Gandraß <niels@gandrass.de>
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
@@ -27,16 +27,17 @@ namespace quiz_archiver;
 use curl;
 use mod_quiz\quiz_attempt;
 
-defined('MOODLE_INTERNAL') || die();
+// @codingStandardsIgnoreLine
+defined('MOODLE_INTERNAL') || die(); // @codeCoverageIgnore
 
-require_once("$CFG->dirroot/mod/quiz/locallib.php");  // Required for legacy mod_quiz functions ...
+// Required for legacy mod_quiz functions ...
+require_once("$CFG->dirroot/mod/quiz/locallib.php");  // @codeCoverageIgnore
 
 
 /**
  * Quiz report renderer
  */
 class Report {
-
     /** @var object Moodle admin settings object */
     protected object $config;
     /** @var object Moodle course this report is part of */
@@ -50,7 +51,11 @@ class Report {
     public const SECTIONS = [
         "header",
         "quiz_feedback",
+        "quiz_grade",
         "question",
+        "question_correctness",
+        "question_marks",
+        "question_internals",
         "question_feedback",
         "general_feedback",
         "rightanswer",
@@ -63,6 +68,10 @@ class Report {
         "header" => [],
         "question" => [],
         "quiz_feedback" => ["header"],
+        "quiz_grade" => ["header"],
+        "question_correctness" => ["question"],
+        "question_marks" => ["question"],
+        "question_internals" => ["question"],
         "question_feedback" => ["question"],
         "general_feedback" => ["question"],
         "rightanswer" => ["question"],
@@ -74,6 +83,12 @@ class Report {
     public const PAPER_FORMATS = [
         'A0', 'A1', 'A2', 'A3', 'A4', 'A5', 'A6',
         'Letter', 'Legal', 'Tabloid', 'Ledger',
+    ];
+
+
+    /** @var array Filters that can be applied to attemps collection */
+    public const FILTERS = [
+        'latest',
     ];
 
     /**
@@ -102,20 +117,20 @@ class Report {
         global $DB;
 
         try {
-            // Check if job with given wstoken exists for this quiz
+            // Check if job with given wstoken exists for this quiz.
             $jobdata = $DB->get_record(ArchiveJob::JOB_TABLE_NAME, [
                 'courseid' => $this->course->id,
                 'cmid' => $this->cm->id,
                 'quizid' => $this->quiz->id,
-                'wstoken' => $wstoken
+                'wstoken' => $wstoken,
             ], 'status, timecreated', MUST_EXIST);
 
-            // Completed / aborted jobs invalidate access
+            // Completed / aborted jobs invalidate access.
             if ($jobdata->status == ArchiveJob::STATUS_FINISHED || $jobdata->status == ArchiveJob::STATUS_FAILED) {
                 return false;
             }
 
-            // Job must still be valid
+            // Job must still be valid.
             if (($jobdata->timecreated + ($this->config->job_timeout_min * 60)) > time()) {
                 return true;
             }
@@ -134,7 +149,7 @@ class Report {
      *
      * @throws \dml_exception
      */
-    public function get_attempts(): array {
+    public function get_all_attempts(): array {
         global $DB;
 
         return $DB->get_records_sql(
@@ -148,29 +163,69 @@ class Report {
     }
 
     /**
+     * Get filtered attempts for this quiz, excluding previews
+     *
+     * @param array $filterkeys List of filter keys to filter attempts by.
+     * @return array Array of all attempt IDs together with the userid that were
+     * made inside this quiz.
+     *
+     * @throws \dml_exception
+     */
+    public function get_filtered_attempts(array $filterkeys): array {
+        // Exit early if we have no filters given.
+        if (empty($filterkeys)) {
+            return array_values($this->get_all_attempts());
+        }
+
+        // Perform the actual filtering, de-duplicating requested filters.
+        $filterattempts = [];
+        foreach (array_unique($filterkeys) as $filter) {
+            switch ($filter) {
+                case self::FILTERS[0]: // Is "latest".
+                    $filterattempts[] = $this->get_latest_attempt_of_each_user();
+                    break;
+            }
+        }
+
+        // Intersect different filter results for and-operator combination.
+        // NOTE: For this to work, filter results must map their attempts id
+        // to the database row, containing at least (again) the attempts id
+        // as well as the users id.
+        // Example: `[123 => (object) ['attemptid' => 123, 'userid' => 4]]`.
+        $filteridsmerge = array_shift($filterattempts);
+        foreach ($filterattempts as $attempts) {
+            $filteridsmerge = array_intersect_key($filteridsmerge, $attempts);
+        }
+
+        return array_values($filteridsmerge);
+    }
+
+    /**
      * Gets the metadata of all attempts made inside this quiz, excluding previews.
      *
-     * @param array|null $filter_attemptids If given, only attempts with the given
+     * @param array|null $filterattemptids If given, only attempts with the given
      * IDs will be returned.
      *
      * @return array
      * @throws \dml_exception
      */
-    public function get_attempts_metadata(array $filter_attemptids = null): array {
+    public function get_attempts_metadata(?array $filterattemptids = null): array {
         global $DB;
 
-        // Handle attempt ID filter
-        if ($filter_attemptids) {
-            $filter_where_clause = "AND qa.id IN (".implode(', ', array_map(fn ($v): string => intval($v), $filter_attemptids)). ")";
+        // Handle attempt ID filter.
+        if ($filterattemptids) {
+            $filterattemptidslist = implode(', ', array_map(fn ($v): string => intval($v), $filterattemptids));
+            $filterwhereclause = "AND qa.id IN (" . $filterattemptidslist .  ")";
         }
 
-        // Get all requested attempts
+        // Get all requested attempts.
         return $DB->get_records_sql(
-            "SELECT qa.id AS attemptid, qa.userid, qa.attempt, qa.state, qa.timestart, qa.timefinish, u.username, u.firstname, u.lastname ".
-            "FROM {quiz_attempts} qa LEFT JOIN {user} u ON qa.userid = u.id ".
-            "WHERE qa.preview = 0 AND qa.quiz = :quizid " . ($filter_where_clause ?? ''),
+            "SELECT qa.id AS attemptid, qa.userid, qa.attempt, qa.state, qa.timestart, qa.timefinish, " .
+            "       u.username, u.firstname, u.lastname, u.email, u.idnumber " .
+            "FROM {quiz_attempts} qa LEFT JOIN {user} u ON qa.userid = u.id " .
+            "WHERE qa.preview = 0 AND qa.quiz = :quizid " . ($filterwhereclause ?? ''),
             [
-                "quizid" => $this->quiz->id
+                "quizid" => $this->quiz->id,
             ]
         );
     }
@@ -215,12 +270,12 @@ class Report {
         $res = $DB->get_records_sql(
             "SELECT id AS attemptid " .
             "FROM {quiz_attempts} " .
-            "WHERE preview = 0 AND quiz = :quizid AND userid = :userid ".
-            "ORDER BY id DESC ".
+            "WHERE preview = 0 AND quiz = :quizid AND userid = :userid " .
+            "ORDER BY id DESC " .
             "LIMIT 1",
             [
                 "quizid" => $this->quiz->id,
-                "userid" => $userid
+                "userid" => $userid,
             ]
         );
 
@@ -229,6 +284,26 @@ class Report {
         }
 
         return array_values($res)[0]->attemptid;
+    }
+
+    /**
+     * Returns a list of IDs of the latest attempt for each user on this quiz,
+     * excluding previews.
+     *
+     * @return array List with IDs of each users last attempt, null if none found.
+     *
+     * @throws \dml_exception
+     */
+    public function get_latest_attempt_of_each_user(): ?array {
+        global $DB;
+
+        return $DB->get_records_sql(
+            "SELECT MAX(id) AS attemptid, userid " .
+            "FROM {quiz_attempts} " .
+            "WHERE preview = 0 AND quiz = :quizid " .
+            "GROUP BY userid",
+            [ "quizid" => $this->quiz->id ]
+        );
     }
 
     /**
@@ -251,26 +326,45 @@ class Report {
      * Builds the section selection array based on the given archive quiz form
      * data.
      *
-     * @param object $archive_quiz_form_data Data object from a submitted archive_quiz_form
+     * @param object $archivequizformdata Data object from a submitted archive_quiz_form
      * @return array Associative array containing the selected sections for export
      */
-    public static function build_report_sections_from_formdata(object $archive_quiz_form_data): array {
-        // Extract section settings from form data object
-        $report_sections = [];
+    public static function build_report_sections_from_formdata(object $archivequizformdata): array {
+        // Extract section settings from form data object.
+        $reportsections = [];
         foreach (self::SECTIONS as $section) {
-            $report_sections[$section] = $archive_quiz_form_data->{'export_report_section_'.$section};
+            $reportsections[$section] = $archivequizformdata->{'export_report_section_' . $section};
         }
 
-        // Disable all sections that depend on a disabled section
+        // Disable all sections that depend on a disabled section.
         foreach (self::SECTION_DEPENDENCIES as $section => $dependencies) {
             foreach ($dependencies as $dependency) {
-                if (!$report_sections[$dependency]) {
-                    $report_sections[$section] = 0;
+                if (!$reportsections[$dependency]) {
+                    $reportsections[$section] = 0;
                 }
             }
         }
 
-        return $report_sections;
+        return $reportsections;
+    }
+
+    /**
+     * Builds the filter selection array based on the given archive quiz form
+     * data.
+     *
+     * @param object $archivequizformdata Data object from a submitted archive_quiz_form
+     * @return array Array containing the selected filters for attempts
+     */
+    public static function build_attempts_filters_from_formdata(object $archivequizformdata): array {
+        // Extract attempt filters from form data object.
+        $attemptfilters = [];
+        foreach (self::FILTERS as $filter) {
+            if ($archivequizformdata->{'export_attempts_filter_' . $filter}) {
+                array_push($attemptfilters, $filter);
+            }
+        }
+
+        return $attemptfilters;
     }
 
     /**
@@ -284,23 +378,49 @@ class Report {
      * @throws \dml_exception
      * @throws \moodle_exception
      */
-    public function get_attempt_attachments(int $attemptid): array {
-        // Prepare
+    public static function get_attempt_attachments(int $attemptid): array {
+        // Prepare.
         $files = [];
-        $ctx = \context_module::instance($this->cm->id);
-        $attemptobj = quiz_create_attempt_handling_errors($attemptid, $this->cm->id);
+        $attemptobj = quiz_create_attempt_handling_errors($attemptid);
+        $ctx = \context_module::instance($attemptobj->get_cmid());
 
-        // Get all files from all questions inside this attempt
+        // Get all files from all questions inside this attempt.
         foreach ($attemptobj->get_slots() as $slot) {
             $qa = $attemptobj->get_question_attempt($slot);
-            $qa_files = $qa->get_last_qt_files('attachments', $ctx->id);
+            $qafiles = $qa->get_last_qt_files('attachments', $ctx->id);
 
-            foreach ($qa_files as $qa_file) {
+            foreach ($qafiles as $qafile) {
                 $files[] = [
                     'usageid' => $qa->get_usage_id(),
                     'slot' => $slot,
-                    'file' => $qa_file,
+                    'file' => $qafile,
+                    'itemid' => "{$qa->get_usage_id()}/{$slot}/{$qafile->get_itemid()}",
+                    /* ^-- YES, this is the abomination of a non-numeric itemid that question_attempt::get_response_file_url()
+                       creates while eating innocent programmers for breakfast ... */
                 ];
+            }
+
+            // NOTE: Code template files of qType JACK questions are not considered attachments by
+            // NOTE: moodle itself but for archiving they should be included as such.
+            if ($qa->get_question()->qtype->plugin_name() == 'qtype_jack') {
+                // NOTE: From https://github.com/Wunderbyte-GmbH/moodle_qtype_jack/blob/main/renderer.php#L82 .
+                $jackcodetemplatefiles = get_file_storage()->get_area_files(
+                    $qa->get_question()->contextid,
+                    'qtype_jack',
+                    'responsefiletemplate',
+                    $qa->get_question()->id,
+                    includedirs: false,
+                );
+
+                // NOTE: Currently there can only be one or none code template file. Keep the loop for the future.
+                foreach ($jackcodetemplatefiles as $jacktemplatefile) {
+                    $files[] = [
+                        'usageid' => $qa->get_usage_id(),
+                        'slot' => $slot,
+                        'file' => $jacktemplatefile,
+                        'itemid' => $jacktemplatefile->get_itemid(),
+                    ];
+                }
             }
         }
 
@@ -318,7 +438,7 @@ class Report {
      * @throws \dml_exception
      * @throws \moodle_exception
      */
-    public function get_attempt_attechments_metadata(int $attemptid): array {
+    public function get_attempt_attachments_metadata(int $attemptid): array {
         $res = [];
 
         foreach ($this->get_attempt_attachments($attemptid) as $attachment) {
@@ -326,7 +446,7 @@ class Report {
                 $attachment['file']->get_contextid(),
                 $attachment['file']->get_component(),
                 $attachment['file']->get_filearea(),
-                "{$attachment['usageid']}/{$attachment['slot']}/{$attachment['file']->get_itemid()}",  # YES, this is the abomination of a non-numeric itemid that question_attempt::get_response_file_url() creates and while eating innocent programmers for breakfast ...
+                $attachment['itemid'],
                 $attachment['file']->get_filepath(),
                 $attachment['file']->get_filename()
             ));
@@ -357,15 +477,18 @@ class Report {
      * @throws \moodle_exception
      */
     public function generate(int $attemptid, array $sections): string {
-        global $DB, $PAGE;
+        global $DB, $OUTPUT, $PAGE;
+
         $ctx = \context_module::instance($this->cm->id);
         $renderer = $PAGE->get_renderer('mod_quiz');
         $html = '';
 
-        // Get quiz data and determine state / elapsed time
+        // Get quiz data and determine state / elapsed time.
         $attemptobj = quiz_create_attempt_handling_errors($attemptid, $this->cm->id);
         $attempt = $attemptobj->get_attempt();
         $quiz = $attemptobj->get_quiz();
+        $quba = \question_engine::load_questions_usage_by_activity($attemptobj->get_uniqueid());
+        $quba->preload_all_step_users();
         $options = \mod_quiz\question\display_options::make_from_quiz($this->quiz, quiz_attempt_state($quiz, $attempt));
         $options->flags = quiz_get_flag_option($attempt, $ctx);
         $overtime = 0;
@@ -384,151 +507,172 @@ class Report {
             $timetaken = get_string('unfinished', 'quiz');
         }
 
-        // ##### Section: Quiz header #####
+        // Section: Quiz header.
         if ($sections['header']) {
+            $summaryinfo = new \mod_quiz\output\attempt_summary_information();
 
-            $quiz_header_data = [];
-            $attempt_user = $DB->get_record('user', ['id' => $attemptobj->get_userid()]);
-            $userpicture = new \user_picture($attempt_user);
+            // User name and link.
+            $attemptuser = $DB->get_record('user', ['id' => $attemptobj->get_userid()]);
+            $userpicture = new \user_picture($attemptuser);
             $userpicture->courseid = $attemptobj->get_courseid();
-            $quiz_header_data['user'] = [
-                'title' => $userpicture,
-                'content' => new \action_link(
-                    new \moodle_url('/user/view.php', ['id' => $attempt_user->id, 'course' => $attemptobj->get_courseid()]),
-                    fullname($attempt_user, true)
-                ),
-            ];
+            $userlink = new \action_link(
+                new \moodle_url('/user/view.php', ['id' => $attemptuser->id, 'course' => $attemptobj->get_courseid()]),
+                fullname($attemptuser, true)
+            );
+            $summaryinfo->add_item(
+                'user',
+                get_string('user'),
+                $OUTPUT->render($userpicture) . '&nbsp;' . $OUTPUT->render($userlink)
+            );
 
-            // Quiz metadata
-            $quiz_header_data['course'] = [
-                'title' => get_string('course'),
-                'content' => $this->course->fullname . ' (Course-ID: ' . $this->course->id . ')'
-            ];
+            // User email.
+            $summaryinfo->add_item(
+                'useremail',
+                get_string('email'),
+                $attemptuser->email ?: '<i>' . get_string('none') . '</i>'
+            );
 
-            $quiz_header_data['quiz'] = [
-                'title' => get_string('modulename', 'quiz'),
-                'content' => $this->quiz->name . ' (Quiz-ID: ' . $this->quiz->id . ')'
-            ];
+            // User ID number.
+            $summaryinfo->add_item(
+                'useridnumber',
+                get_string('idnumber'),
+                $attemptuser->idnumber ?: '<i>' . get_string('none') . '</i>'
+            );
+
+            // Quiz metadata.
+            $summaryinfo->add_item(
+                'course',
+                get_string('course'),
+                $this->course->fullname . ' (Course-ID: ' . $this->course->id . ')'
+            );
+
+            $summaryinfo->add_item(
+                'quiz',
+                get_string('modulename', 'quiz'),
+                $this->quiz->name . ' (Quiz-ID: ' . $this->quiz->id . ')'
+            );
 
             // Timing information.
-            $quiz_header_data['startedon'] = [
-                'title' => get_string('startedon', 'quiz'),
-                'content' => userdate($attempt->timestart),
-            ];
+            $summaryinfo->add_item(
+                'startedon',
+                get_string('startedon', 'quiz'),
+                userdate($attempt->timestart)
+            );
 
-            $quiz_header_data['state'] = [
-                'title' => get_string('attemptstate', 'quiz'),
-                'content' => quiz_attempt::state_name($attempt->state),
-            ];
+            $summaryinfo->add_item(
+                'state',
+                get_string('attemptstate', 'quiz'),
+                quiz_attempt::state_name($attempt->state)
+            );
 
             if ($attempt->state == quiz_attempt::FINISHED) {
-                $quiz_header_data['completedon'] = [
-                    'title' => get_string('completedon', 'quiz'),
-                    'content' => userdate($attempt->timefinish),
-                ];
-                $quiz_header_data['timetaken'] = [
-                    'title' => get_string('timetaken', 'quiz'),
-                    'content' => $timetaken,
-                ];
+                $summaryinfo->add_item('completedon', get_string('completedon', 'quiz'), userdate($attempt->timefinish));
+                $summaryinfo->add_item('timetaken', get_string('attemptduration', 'quiz'), $timetaken);
             }
 
             if (!empty($overtime)) {
-                $quiz_header_data['overdue'] = [
-                    'title' => get_string('overdue', 'quiz'),
-                    'content' => $overtime,
-                ];
+                $summaryinfo->add_item('overdue', get_string('overdue', 'quiz'), $overtime);
             }
 
-            // Grades
+            // Grades.
             $grade = quiz_rescale_grade($attempt->sumgrades, $quiz, false);
-            if ($options->marks >= \question_display_options::MARK_AND_MAX && quiz_has_grades($quiz)) {
-                if (is_null($grade)) {
-                    $quiz_header_data['grade'] = [
-                        'title' => get_string('grade', 'quiz'),
-                        'content' => quiz_format_grade($quiz, $grade),
-                    ];
-                }
+            if ($sections['quiz_grade']) {
+                if (quiz_has_grades($quiz)) {
+                    if (is_null($grade)) {
+                        $summaryinfo->add_item('grade', get_string('gradenoun'), get_string('notyetgraded', 'quiz'));
+                    }
 
-                if ($attempt->state == quiz_attempt::FINISHED) {
-                    // Show raw marks only if they are different from the grade (like on the view page).
-                    if ($quiz->grade != $quiz->sumgrades) {
+                    if ($attempt->state == quiz_attempt::FINISHED) {
+                        // Show raw marks only if they are different from the grade (like on the view page).
+                        if ($quiz->grade != $quiz->sumgrades) {
+                            $a = new \stdClass();
+                            $a->grade = quiz_format_grade($quiz, $attempt->sumgrades);
+                            $a->maxgrade = quiz_format_grade($quiz, $quiz->sumgrades);
+                            $summaryinfo->add_item('marks', get_string('marks', 'quiz'), get_string('outofshort', 'quiz', $a));
+                        }
+
+                        // Now the scaled grade.
                         $a = new \stdClass();
-                        $a->grade = quiz_format_grade($quiz, $attempt->sumgrades);
-                        $a->maxgrade = quiz_format_grade($quiz, $quiz->sumgrades);
-                        $quiz_header_data['marks'] = [
-                            'title' => get_string('marks', 'quiz'),
-                            'content' => get_string('outofshort', 'quiz', $a),
-                        ];
+                        $a->grade = \html_writer::tag('b', quiz_format_grade($quiz, $grade));
+                        $a->maxgrade = quiz_format_grade($quiz, $quiz->grade);
+                        if ($quiz->grade != 100) {
+                            $a->percent = \html_writer::tag('b', format_float($attempt->sumgrades * 100 / $quiz->sumgrades, 0));
+                            $formattedgrade = get_string('outofpercent', 'quiz', $a);
+                        } else {
+                            $formattedgrade = get_string('outof', 'quiz', $a);
+                        }
+                        $summaryinfo->add_item('grade', get_string('gradenoun'), $formattedgrade);
                     }
-
-                    // Now the scaled grade.
-                    $a = new \stdClass();
-                    $a->grade = \html_writer::tag('b', quiz_format_grade($quiz, $grade));
-                    $a->maxgrade = quiz_format_grade($quiz, $quiz->grade);
-                    if ($quiz->grade != 100) {
-                        $a->percent = \html_writer::tag('b', format_float(
-                            $attempt->sumgrades * 100 / $quiz->sumgrades, 0));
-                        $formattedgrade = get_string('outofpercent', 'quiz', $a);
-                    } else {
-                        $formattedgrade = get_string('outof', 'quiz', $a);
-                    }
-                    $quiz_header_data['grade'] = [
-                        'title' => get_string('grade', 'quiz'),
-                        'content' => $formattedgrade,
-                    ];
                 }
             }
 
             // Any additional summary data from the behaviour.
-            $quiz_header_data = array_merge($quiz_header_data, $attemptobj->get_additional_summary_data($options));
+            foreach ($attemptobj->get_additional_summary_data($options) as $shortname => $data) {
+                $summaryinfo->add_item($shortname, $data['title'], $data['content']);
+            }
 
             // Feedback if there is any, and the user is allowed to see it now.
             if ($sections['quiz_feedback']) {
                 $feedback = $attemptobj->get_overall_feedback($grade);
-                if ($options->overallfeedback && $feedback) {
-                    $quiz_header_data['feedback'] = [
-                        'title' => get_string('feedback', 'quiz'),
-                        'content' => $feedback,
-                    ];
-                }
+                $summaryinfo->add_item(
+                    'feedback',
+                    get_string('feedback', 'quiz'),
+                    $feedback ?: '<i>' . get_string('none') . '</i>'
+                );
             }
 
-            // Add export date
-            $quiz_header_data['exportdate'] = [
-                'title' => get_string('archived', 'quiz_archiver'),
-                'content' => userdate(time()),
-            ];
+            // Add export date.
+            $summaryinfo->add_item('exportdate', get_string('archived', 'quiz_archiver'), userdate(time()));
 
-            // Add summary table to the html
-            $html .= $renderer->review_summary_table($quiz_header_data, 0);
+            $html .= $renderer->review_attempt_summary($summaryinfo, 0);
         }
 
-        // ##### Section: Quiz questions #####
+        // Section: Quiz questions.
         if ($sections['question']) {
             $slots = $attemptobj->get_slots();
             foreach ($slots as $slot) {
-                // Define display options for this question
+                // Define display options for this question.
                 $originalslot = $attemptobj->get_original_slot($slot);
                 $number = $attemptobj->get_question_number($originalslot);
                 $displayoptions = $attemptobj->get_display_options_with_edit_link(true, $slot, "");
                 $displayoptions->readonly = true;
-                $displayoptions->marks = 2;
                 $displayoptions->manualcomment = 1;
                 $displayoptions->rightanswer = $sections['rightanswer'];
                 $displayoptions->feedback = $sections['question_feedback'];
                 $displayoptions->generalfeedback = $sections['general_feedback'];
                 $displayoptions->history = $sections['history'];
-                $displayoptions->correctness = 1;
-                $displayoptions->numpartscorrect = 1;
                 $displayoptions->flags = 1;
                 $displayoptions->manualcommentlink = 0;
 
-                // Render question as HTML
+                // Handle question correctness.
+                if ($sections['question_correctness']) {
+                    $displayoptions->correctness = \question_display_options::VISIBLE;
+                    $displayoptions->numpartscorrect = \question_display_options::VISIBLE;
+                } else {
+                    $displayoptions->correctness = \question_display_options::HIDDEN;
+                    $displayoptions->numpartscorrect = \question_display_options::HIDDEN;
+                }
+
+                // Handle question marks display option.
+                if ($sections['question_marks']) {
+                    $displayoptions->marks = \question_display_options::MARK_AND_MAX;
+                } else {
+                    $displayoptions->marks = \question_display_options::HIDDEN;
+                }
+
+                // Handle questions that have been moved around in the quiz after the attempt.
                 if ($slot != $originalslot) {
                     $attemptobj->get_question_attempt($slot)->set_max_mark(
-                        $attemptobj->get_question_attempt($originalslot)->get_max_mark());
+                        $attemptobj->get_question_attempt($originalslot)->get_max_mark()
+                    );
                 }
-                $quba = \question_engine::load_questions_usage_by_activity($attemptobj->get_uniqueid());
+
+                // Section: Question internals (ID, ID number, tags, version).
+                if ($sections['question_internals']) {
+                    $html .= $this->render_question_internals($attemptobj->get_question_attempt($slot)->get_question());
+                }
+
+                // Render question as HTML.
                 $html .= $quba->render_question($slot, $displayoptions, $number);
             }
         }
@@ -537,16 +681,44 @@ class Report {
     }
 
     /**
+     * Renders an inline metadata block for the given question, containing its
+     * ID, ID number, tags, and question bank version. Used by the
+     * question_internals report section.
+     *
+     * @param \question_definition $question Question to render the metadata for
+     * @return string HTML DOM of the rendered question metadata block
+     *
+     * @throws \coding_exception
+     */
+    protected function render_question_internals(\question_definition $question): string {
+        global $OUTPUT;
+
+        // ID number: show placeholder if unset.
+        $idnumber = ($question->idnumber !== null && $question->idnumber !== '') ? s($question->idnumber) : null;
+
+        // Tags: rendered as pill badges via core's tag renderer.
+        $tagobjects = \core_tag_tag::get_item_tags('core_question', 'question', $question->id);
+        $tagshtml = !empty($tagobjects) ? $OUTPUT->tag_list($tagobjects, null, 'd-inline', 0, null, true) : null;
+
+        return $OUTPUT->render_from_template('quiz_archiver/components/question_internals', [
+            'id' => $question->id,
+            'version' => $question->version,
+            'idnumber' => $idnumber,
+            'tags' => $tagshtml,
+        ]);
+    }
+
+    /**
      * Like generate() but includes a full page HTML DOM including header and
      * footer
      *
      * @param int $attemptid ID of the attempt this report is for
      * @param array $sections Array of self::SECTIONS to include in the report
-     * @param bool $fix_relative_urls If true, all relative URLs will be
+     * @param bool $fixrelativeurls If true, all relative URLs will be
      * forcefully mapped to the Moodle base URL
      * @param bool $minimal If true, unneccessary elements (e.g. navbar) are
      * stripped from the generated HTML DOM
-     * @param bool $inline_images If true, all images will be inlined as base64
+     * @param bool $inlineimages If true, all images will be inlined as base64
      * to prevent rendering issues on user side
      *
      * @return string HTML DOM of the rendered quiz attempt report
@@ -556,61 +728,97 @@ class Report {
      * @throws \moodle_exception
      * @throws \DOMException
      */
-    public function generate_full_page(int $attemptid, array $sections, bool $fix_relative_urls = true, bool $minimal = true, bool $inline_images = true): string {
-        global $CFG, $OUTPUT;
+    public function generate_full_page(
+        int $attemptid,
+        array $sections,
+        bool $fixrelativeurls = true,
+        bool $minimal = true,
+        bool $inlineimages = true
+    ): string {
+        global $CFG, $OUTPUT, $PAGE;
 
-        // Build HTML tree
+        // Add a quiz archiver specific CSS class to provide a unique CSS selector.
+        // This can be used to add additional styling to the quiz report page accessed by the worker,
+        // for example by specifying additional (s)css in the theme scss setting in the moodle administration.
+        $PAGE->add_body_class('quiz-archiver-report');
+
+        // Build HTML tree.
         $html = "";
         $html .= $OUTPUT->header();
         $html .= self::generate($attemptid, $sections);
         $html .= $OUTPUT->footer();
 
-        // Parse HTML as DOMDocument but supress consistency check warnings
+        // Parse HTML as DOMDocument but supress consistency check warnings.
         libxml_use_internal_errors(true);
         $dom = new \DOMDocument();
         $dom->loadHTML($html);
         libxml_clear_errors();
 
-        // Patch relative URLs
-        if ($fix_relative_urls) {
-            $baseNode = $dom->createElement("base");
-            $baseNode->setAttribute("href", $CFG->wwwroot);
-            $dom->getElementsByTagName('head')[0]->appendChild($baseNode);
+        // Patch relative URLs.
+        if ($fixrelativeurls) {
+            $basenode = $dom->createElement("base");
+            $basenode->setAttribute("href", $CFG->wwwroot);
+            $dom->getElementsByTagName('head')[0]->appendChild($basenode);
         }
 
-        // Cleanup DOM if desired
+        // Cleanup DOM if desired.
         if ($minimal) {
-            // We need to inject custom CSS to hide elements since the DOM generated by
+            // We need to inject custom CSS to hide elements since the DOM generated by.
             // Moodle can be corrupt which causes the PHP DOMDocument parser to die...
-            $cssHacksNode = $dom->createElement("style", "
-                nav.navbar {
-                    display: none !important;
+            $csshacksnode = $dom->createElement("style", "
+                /* Hide everything except the main page region */
+                @media print {
+                    body * {
+                        visibility: hidden;
+                    }
+
+                    #region-main,
+                    #region-main * {
+                        visibility: visible;
+                    }
                 }
-                
-                footer {
-                    display: none !important;
-                }
-                
-                div#page {
-                    margin-top: 0 !important;
-                    padding-left: 0 !important;
-                    padding-right: 0 !important;
+
+                /* Ensure that parent container (invisible) does not cause additional margings or paddings */
+                div#page,
+                div.main-inner {
+                    margin: 0 !important;
+                    padding: 0 !important;
                     height: initial !important;
                 }
-                
+
                 div#page-wrapper {
                     height: initial !important;
                 }
-                
+
+                /* Prevent STACK input errors breaking the page */
                 .stackinputerror {
                     display: none !important;
                 }
+
+                /* Force code boxes to reflow to page width */
+                pre[class*='language-'] {
+                    overflow: visible !important;
+                    white-space: pre-wrap !important;
+                }
+
+                /* Remove padding from codebox comments to prevent them from drawing over student code */
+                code .token.comment {
+                    padding: 0.5rem !important;
+                }
+
+                /* Expand qtype JACK text areas to dynamically fit content */
+                .que.jack textarea.qtype_jack_response[class*='qtype_jack_'] {
+                    field-sizing: content !important;
+                    white-space: pre-wrap !important;
+                    overflow: hidden !important;
+                    resize: none !important;
+                }
             ");
-            $dom->getElementsByTagName('head')[0]->appendChild($cssHacksNode);
+            $dom->getElementsByTagName('head')[0]->appendChild($csshacksnode);
         }
 
-        // Convert all local images to base64 if desired
-        if ($inline_images) {
+        // Convert all local images to base64 if desired.
+        if ($inlineimages) {
             foreach ($dom->getElementsByTagName('img') as $img) {
                 if (!$this->convert_image_to_base64($img)) {
                     $img->setAttribute('x-debug-inlining-failed', 'true');
@@ -621,6 +829,7 @@ class Report {
         return $dom->saveHTML();
     }
 
+    // @codingStandardsIgnoreStart
     /** @var string Regex for URLs of qtype_stack plots */
     const REGEX_MOODLE_URL_STACKPLOT = '/^(?P<wwwroot>https?:\/\/.+)?(\/question\/type\/stack\/plot\.php\/)(?P<filename>[^\/\#\?\&]+\.(png|svg))$/m';
 
@@ -632,6 +841,7 @@ class Report {
 
     /** @var string Regex for Moodle theme image files */
     const REGEX_MOODLE_URL_THEME_IMAGE = '/^(?P<wwwroot>https?:\/\/.+)?(\/theme\/image\.php\/)(?P<themename>[^\/]+)\/(?P<component>[^\/]+)\/(?P<rev>[^\/]+)\/(?P<image>.+)$/m';
+    // @codingStandardsIgnoreEnd
 
     /** @var string[] Mapping of file extensions to file types that are allowed to process */
     const ALLOWED_IMAGE_TYPES = [
@@ -643,7 +853,7 @@ class Report {
         'webp' => 'image/webp',
         'bmp' => 'image/bmp',
         'ico' => 'image/x-icon',
-        'tiff' => 'image/tiff'
+        'tiff' => 'image/tiff',
     ];
 
     /**
@@ -657,7 +867,7 @@ class Report {
     protected function convert_image_to_base64(\DOMElement $img): bool {
         global $CFG;
 
-        // Only process images with src attribute
+        // Only process images with src attribute.
         if (!$img->getAttribute('src')) {
             $img->setAttribute('x-debug-notice', 'no source present');
             return false;
@@ -665,115 +875,133 @@ class Report {
             $img->setAttribute('x-original-source', $img->getAttribute('src'));
         }
 
-        // Remove any parameters and anchors from URL
-        $img_src = preg_replace('/^([^\?\&\#]+).*$/', '${1}', $img->getAttribute('src'));
+        // Remove any parameters and anchors from URL.
+        $imgsrc = preg_replace('/^([^\?\&\#]+).*$/', '${1}', $img->getAttribute('src'));
 
-        // Convert relative URLs to absolute URLs
+        // Convert relative URLs to absolute URLs.
         $config = get_config('quiz_archiver');
-        $moodle_baseurl = rtrim($config->internal_wwwroot ?: $CFG->wwwroot, '/').'/';
+        $moodlebaseurl = rtrim($config->internal_wwwroot ?: $CFG->wwwroot, '/') . '/';
         if ($config->internal_wwwroot) {
-            $img_src = str_replace(rtrim($CFG->wwwroot, '/'), rtrim($config->internal_wwwroot, '/'), $img_src);
+            $imgsrc = str_replace(rtrim($CFG->wwwroot, '/'), rtrim($config->internal_wwwroot, '/'), $imgsrc);
         }
-        $img_src_url = $this->ensure_absolute_url($img_src, $moodle_baseurl);
+        $imgsrcurl = $this->ensure_absolute_url($imgsrc, $moodlebaseurl);
 
-        # Make sure to only process web URLs and nothing that somehow remained a valid local filepath
-        if (!substr($img_src_url, 0, 4) === "http") { // Yes, this includes https as well ;)
+        // Make sure to only process web URLs and nothing that somehow remained a valid local filepath.
+        if (!substr($imgsrcurl, 0, 4) === "http") { // Yes, this includes https as well ;).
             $img->setAttribute('x-debug-notice', 'not a web URL');
             return false;
         }
 
-        // Only process allowed image types
-        $img_ext = pathinfo($img_src_url, PATHINFO_EXTENSION);
-        if (!array_key_exists($img_ext, self::ALLOWED_IMAGE_TYPES)) {
-            // Edge case: Moodle theme images must not always contain extensions
-            if (!preg_match(self::REGEX_MOODLE_URL_THEME_IMAGE, $img_src_url)) {
+        // Only process allowed image types.
+        $imgext = strtolower(pathinfo($imgsrcurl, PATHINFO_EXTENSION));
+        if (!array_key_exists($imgext, self::ALLOWED_IMAGE_TYPES)) {
+            // Edge case: Moodle theme images must not always contain extensions.
+            if (!preg_match(self::REGEX_MOODLE_URL_THEME_IMAGE, $imgsrcurl)) {
                 $img->setAttribute('x-debug-notice', 'image type not allowed');
                 return false;
             }
         }
 
-        // Try to get image content based on link type
-        $regex_matches = null;
-        $img_data = null;
+        // Try to get image content based on link type.
+        $regexmatches = null;
+        $imgdata = null;
+        $imgmime = array_key_exists($imgext, self::ALLOWED_IMAGE_TYPES) ? self::ALLOWED_IMAGE_TYPES[$imgext] : null;
 
-        // Handle special internal URLs first
-        $is_internal_url = substr($img_src_url, 0, strlen($moodle_baseurl)) === $moodle_baseurl;
-        if ($is_internal_url) {
-            if (preg_match(self::REGEX_MOODLE_URL_PLUGINFILE, $img_src_url, $regex_matches)) {
-                // ### Link type: Moodle pluginfile URL ###
+        // Handle special internal URLs first.
+        $isinternalurl = substr($imgsrcurl, 0, strlen($moodlebaseurl)) === $moodlebaseurl;
+        if ($isinternalurl) {
+            if (preg_match(self::REGEX_MOODLE_URL_PLUGINFILE, $imgsrcurl, $regexmatches)) {
+                // Link type: Moodle pluginfile URL.
                 $img->setAttribute('x-url-type', 'MOODLE_URL_PLUGINFILE');
 
-                // Edge case detection: question / qtype files follow another pattern, inserting questionbank_id and question_slot after filearea ...
-                if ($regex_matches['component'] == 'question' || strpos($regex_matches['component'], 'qtype_') === 0) {
-                    $regex_matches = null;
-                    if (!preg_match(self::REGEX_MOODLE_URL_PLUGINFILE_QUESTION_AND_QTYPE, $img_src_url, $regex_matches)) {
+                // Edge case detection: question / qtype files follow another pattern,
+                // inserting questionbank_id and question_slot after filearea ...
+                if ($regexmatches['component'] == 'question' || strpos($regexmatches['component'], 'qtype_') === 0) {
+                    $regexmatches = null;
+                    if (!preg_match(self::REGEX_MOODLE_URL_PLUGINFILE_QUESTION_AND_QTYPE, $imgsrcurl, $regexmatches)) {
                         $img->setAttribute('x-url-type', 'MOODLE_URL_PLUGINFILE_QUESTION_AND_QTYPE');
                         return false;
                     }
                 }
 
-                // Get file content via Moodle File API
+                // Decode RFC 3986 URL escaped sequences.
+                $regexmatches['filename'] = urldecode($regexmatches['filename']);
+
+                // Get file content via Moodle File API.
                 $fs = get_file_storage();
                 $file = $fs->get_file(
-                    $regex_matches['contextid'],
-                    $regex_matches['component'],
-                    $regex_matches['filearea'],
-                    !empty($regex_matches['itemid']) ? $regex_matches['itemid'] : 0,
-                    '/',  // Dirty simplification but works for now *sigh*
-                    $regex_matches['filename']
+                    $regexmatches['contextid'],
+                    $regexmatches['component'],
+                    $regexmatches['filearea'],
+                    !empty($regexmatches['itemid']) ? $regexmatches['itemid'] : 0,
+                    '/', // Dirty simplification but works for now *sigh*.
+                    $regexmatches['filename'],
                 );
 
                 if (!$file) {
                     $img->setAttribute('x-debug-notice', 'moodledata file not found');
                     return false;
                 }
-                $img_data = $file->get_content();
-            } else if (preg_match(self::REGEX_MOODLE_URL_STACKPLOT, $img_src_url, $regex_matches)) {
-                // ### Link type: qtype_stack plotfile ###
+                $imgdata = $file->get_content();
+            } else if (preg_match(self::REGEX_MOODLE_URL_STACKPLOT, $imgsrcurl, $regexmatches)) {
+                // Link type: qtype_stack plotfile.
                 $img->setAttribute('x-url-type', 'MOODLE_URL_STACKPLOT');
 
-                // Get STACK plot file from disk
-                $filename = $CFG->dataroot . '/stack/plots/' . clean_filename($regex_matches['filename']);
+                // Decode RFC 3986 URL escaped sequences.
+                $regexmatches['filename'] = urldecode($regexmatches['filename']);
+
+                // Get STACK plot file from disk.
+                $filename = $CFG->dataroot . '/stack/plots/' . clean_filename($regexmatches['filename']);
                 if (!is_readable($filename)) {
                     $img->setAttribute('x-debug-notice', 'stack plot file not readable');
                     return false;
                 }
-                $img_data = file_get_contents($filename);
+                $imgdata = file_get_contents($filename);
             } else {
                 $img->setAttribute('x-debug-internal-url-without-handler', '');
             }
         }
 
-        // Fall back to generic URL handling if image data not already set by internal handling routines
-        if ($img_data === null) {
-            if (preg_match(self::REGEX_MOODLE_URL_THEME_IMAGE, $img_src_url)) {
-                // ### Link type: Moodle theme image ###
-                // We should be able to download there images using a simple HTTP request
-                // Accessing them directly from disk is a little more complicated due to caching and other logic (see: /theme/image.php).
+        // Fall back to generic URL handling if image data not already set by internal handling routines.
+        if ($imgdata === null) {
+            if (preg_match(self::REGEX_MOODLE_URL_THEME_IMAGE, $imgsrcurl)) {
+                // Link type: Moodle theme image.
+                // We should be able to download there images using a simple HTTP request.
+                // Accessing them directly from disk is a little more complicated due to
+                // caching and other logic (see: /theme/image.php).
                 // Let's try to keep it this way until we encounter explicit problems.
                 $img->setAttribute('x-url-type', 'MOODLE_URL_THEME_IMAGE');
             } else {
-                // ### Link type: Generic ###
+                // Link type: Generic.
                 $img->setAttribute('x-url-type', 'GENERIC');
             }
 
-            // No special local file access. Try to download via HTTP request
-            $c = new curl(['ignoresecurity' => $is_internal_url]);
-            $img_data = $c->get($img_src_url);  // Curl handle automatically closed
-            if ($c->get_info()['http_code'] !== 200 || $img_data === false) {
-                $img->setAttribute('x-debug-more', $img_data);
+            // No special local file access. Try to download via HTTP request.
+            $c = new curl(['ignoresecurity' => $isinternalurl]);
+            $imgdata = $c->get($imgsrcurl);  // Curl handle automatically closed.
+            if ($c->get_info()['http_code'] !== 200 || $imgdata === false) {
+                $img->setAttribute('x-debug-more', $imgdata);
                 $img->setAttribute('x-debug-notice', 'HTTP request failed');
                 return false;
             }
+
+            // Check if we need to detect mime type from response headers.
+            if (!$imgmime) {
+                $imgmime = $c->get_info()['content_type'];
+                if (!in_array($imgmime, self::ALLOWED_IMAGE_TYPES)) {
+                    $img->setAttribute('x-debug-notice', 'image type from response header is not allowed');
+                    return false;
+                }
+            }
         }
 
-        // Encode and replace image if present
-        if (!$img_data) {
+        // Encode and replace image if present.
+        if (!$imgdata) {
             $img->setAttribute('x-debug-notice', 'no image data');
             return false;
         }
-        $img_base64 = base64_encode($img_data);
-        $img->setAttribute('src', 'data:'.self::ALLOWED_IMAGE_TYPES[$img_ext].';base64,'.$img_base64);
+        $imgbase64 = base64_encode($imgdata);
+        $img->setAttribute('src', 'data:' . $imgmime . ';base64,' . $imgbase64);
 
         return true;
     }
@@ -788,36 +1016,40 @@ class Report {
      * @return string Absolute URL
      */
     protected static function ensure_absolute_url(string $url, string $base): string {
-        /* return if already absolute URL */
+        // Return if already absolute URL.
         if (parse_url($url, PHP_URL_SCHEME) != '') {
             return $url;
         }
 
-        /* queries and anchors */
+        // Queries and anchors.
         if ($url[0] == '#' || $url[0] == '?') {
-            return $base.$url;
+            return $base . $url;
         }
 
-        /* parse base URL and convert to local variables: $scheme, $host, $path */
-        extract(parse_url($base));
+        // Parse base URL and convert to local variables: $scheme, $host, $path.
+        $urlparsed = parse_url($base);
+        $scheme = $urlparsed['scheme'];
+        $host = $urlparsed['host'];
+        $path = $urlparsed['path'];
 
-        /* remove non-directory element from path */
+        // Remove non-directory element from path.
         $path = preg_replace('#/[^/]*$#', '', $path);
 
-        /* destroy path if relative url points to root */
+        // Destroy path if relative url points to root.
         if ($url[0] == '/') {
             $path = '';
         }
 
-        /* dirty absolute URL */
+        // Dirty absolute URL.
         $abs = "$host$path/$url";
 
-        /* replace '//' or '/./' or '/foo/../' with '/' */
+        // Replace '//' or '/./' or '/foo/../' with '/'.
         $re = ['#(/\.?/)#', '#/(?!\.\.)[^/]+/\.\./#'];
-        for ($n = 1; $n > 0; $abs = preg_replace($re, '/', $abs, -1, $n)) {}
+        for ($n = 1; $n > 0; $abs = preg_replace($re, '/', $abs, -1, $n)) {
+            continue;
+        }
 
-        /* absolute URL is ready! */
-        return $scheme.'://'.$abs;
+        // Absolute URL is ready!
+        return $scheme . '://' . $abs;
     }
-
 }

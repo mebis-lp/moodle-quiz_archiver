@@ -16,15 +16,18 @@
 
 namespace quiz_archiver\local;
 
+// @codingStandardsIgnoreLine
+defined('MOODLE_INTERNAL') || die(); // @codeCoverageIgnore
+
+
 /**
  * Custom util functions
  *
  * @package   quiz_archiver
- * @copyright 2024 Niels Gandraß <niels@gandrass.de>
- * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or late
+ * @copyright 2026 Niels Gandraß <niels@gandrass.de>
+ * @license   https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class util {
-
     /**
      * Convert duration in seconds to a human readable format.
      *
@@ -32,15 +35,25 @@ class util {
      * @return string Human readable duration string
      */
     public static function duration_to_human_readable(int $duration): string {
-        // Calculate isolated time units
+        // Calculate isolated time units.
         $years = floor($duration / YEARSECS);
-        $months = floor(($duration % YEARSECS) / (YEARSECS / 12));
-        $days = floor(($duration % (YEARSECS / 12)) / DAYSECS);
-        $hours = floor(($duration % DAYSECS) / HOURSECS);
-        $minutes = floor(($duration % HOURSECS) / MINSECS);
+        $duration -= $years * YEARSECS;
+
+        $months = floor($duration / (YEARSECS / 12));
+        $duration -= $months * (YEARSECS / 12);
+
+        $days = floor($duration / DAYSECS);
+        $duration -= $days * DAYSECS;
+
+        $hours = floor($duration / HOURSECS);
+        $duration -= $hours * HOURSECS;
+
+        $minutes = floor($duration / MINSECS);
+        $duration -= $minutes * MINSECS;
+
         $seconds = floor($duration % MINSECS);
 
-        // Generate human readable string
+        // Generate human readable string.
         $humanreadable = '';
         if ($years > 0) {
             $humanreadable .= $years . 'y ';
@@ -59,6 +72,10 @@ class util {
         }
         if ($seconds > 0) {
             $humanreadable .= $seconds . 's ';
+        }
+
+        if (!$humanreadable) {
+            $humanreadable = '0s';
         }
 
         return trim($humanreadable);
@@ -87,5 +104,4 @@ class util {
 
         return [$duration, get_string('seconds')];
     }
-
 }
